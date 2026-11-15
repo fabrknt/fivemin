@@ -1,0 +1,6 @@
+[submodule "lib/hl-price-guard"]
+	path = lib/hl-price-guard
+	url = https://github.com/fabrknt/hl-price-guard
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
