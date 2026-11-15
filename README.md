@@ -21,6 +21,9 @@ unproven unproven.toml   # delete each check in turn: which test notices (about 
 
 Uses [hl-price-guard](https://github.com/fabrknt/hl-price-guard) v0.4.1 (`PythRef`, `HLPriceGuard`).
 
+Walk through it: the recipe [Open a five-minute up-or-down market](https://fabrknt.com/recipes/five-minute-market)
+(about 10 minutes), and the Dojo topic [Settle at a set time from a price already on chain](https://fabrknt.com/dojo/topics/settle-at-a-set-time).
+
 ## Written with AI
 
 Claude (Opus 5.5) wrote all of it, in one session on 2026-11-15: the spec, the two contracts
