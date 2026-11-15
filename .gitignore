@@ -2,3 +2,7 @@ out/
 cache/
 broadcast/
 .env
+.unproven.lock
+*.unproven-orig
+*.unproven-restore
+*.unproven-orig.partial

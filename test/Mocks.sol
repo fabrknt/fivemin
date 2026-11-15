@@ -16,7 +16,7 @@ contract MockERC20 {
         return true;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external virtual returns (bool) {
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         return true;
@@ -55,6 +55,15 @@ contract FeeOnTransferERC20 is MockERC20 {
     function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
         allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
+        balanceOf[to] += amount - amount / 10;
+        return true;
+    }
+}
+
+/// Keeps 10% of every outgoing transfer: a recipient would get less than its payout.
+contract FeeOnPayoutERC20 is MockERC20 {
+    function transfer(address to, uint256 amount) external override returns (bool) {
+        balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount - amount / 10;
         return true;
     }

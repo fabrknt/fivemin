@@ -1,0 +1,315 @@
+# Each check in src/FiveMin.sol, deleted in turn: which test notices.
+# Measured with unproven (https://github.com/fabrknt/unproven). A row with no `tests_fail` is
+# unproven: nothing in this repository notices the check is gone. The Monad fork test is left out
+# (it needs the network); every other test runs for every row.
+#
+#   unproven unproven.toml
+
+root = "."
+build = "forge build"
+test = "forge test --no-match-contract MonadFork"
+test_format = "forge"
+
+[[claim]]
+row = "constructor: treasury is not zero"
+file = "src/FiveMin.sol"
+in_fn = "constructor(address treasury_) {"
+find = "if (treasury_ == address(0)) revert ZeroAddress();"
+replace = "if (false && treasury_ == address(0)) revert ZeroAddress();"
+tests_fail = ["test_zeroAddresses_andTwoStepOwner"]
+
+[[claim]]
+row = "onlyOwner"
+file = "src/FiveMin.sol"
+in_fn = "modifier onlyOwner() {"
+find = "if (msg.sender != owner) revert NotOwner();"
+replace = "if (false && msg.sender != owner) revert NotOwner();"
+tests_fail = ["test_onlyTheOwnerAdministers"]
+
+[[claim]]
+row = "list: asset not already listed"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "if (address(listings[assetId].source) != address(0)) revert AlreadyListed(assetId);"
+replace = "if (false && address(listings[assetId].source) != address(0)) revert AlreadyListed(assetId);"
+tests_fail = ["test_listingIsFixed_andPauseStopsOnlyNewBets"]
+
+# Unproven and not a hole: a listing whose source is zero reads as not listed, so every call on it reverts NotListed.
+[[claim]]
+row = "list: source is not zero"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "address(l.source) == address(0) || "
+replace = "false || "
+
+[[claim]]
+row = "list: token has code"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "|| address(l.token).code.length == 0 "
+replace = "|| false "
+tests_fail = ["test_listing_capsTheWindow_andRefusesTokensWithoutCode"]
+
+[[claim]]
+row = "list: maxDelay is not 0"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "|| l.maxDelay == 0\n"
+replace = "|| false\n"
+tests_fail = ["test_listing_refusesBadSettings"]
+
+[[claim]]
+row = "list: maxDelay within the source's cap"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "|| l.maxDelay > l.source.maxDelayLimit() "
+replace = "|| false "
+tests_fail = ["test_listing_capsTheWindow_andRefusesTokensWithoutCode"]
+
+[[claim]]
+row = "list: fee at most MAX_FEE_BPS"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "|| l.feeBps > MAX_FEE_BPS "
+replace = "|| false "
+tests_fail = ["test_listing_refusesBadSettings"]
+
+[[claim]]
+row = "list: minStake is not 0"
+file = "src/FiveMin.sol"
+in_fn = "function list("
+find = "|| l.minStake == 0\n"
+replace = "|| false\n"
+tests_fail = ["test_listing_refusesBadSettings"]
+
+[[claim]]
+row = "setTreasury: not zero"
+file = "src/FiveMin.sol"
+in_fn = "function setTreasury("
+find = "if (treasury_ == address(0)) revert ZeroAddress();"
+replace = "if (false && treasury_ == address(0)) revert ZeroAddress();"
+tests_fail = ["test_zeroAddresses_andTwoStepOwner"]
+
+[[claim]]
+row = "acceptOwnership: only the pending owner"
+file = "src/FiveMin.sol"
+in_fn = "function acceptOwnership("
+find = "if (msg.sender != pendingOwner) revert NotPendingOwner();"
+replace = "if (false && msg.sender != pendingOwner) revert NotPendingOwner();"
+tests_fail = ["test_zeroAddresses_andTwoStepOwner"]
+
+[[claim]]
+row = "bet: asset not paused"
+file = "src/FiveMin.sol"
+in_fn = "function bet("
+find = "if (l.paused) revert IsPaused(assetId);"
+replace = "if (false && l.paused) revert IsPaused(assetId);"
+tests_fail = ["test_listingIsFixed_andPauseStopsOnlyNewBets"]
+
+[[claim]]
+row = "bet: startTime on a 300 s boundary"
+file = "src/FiveMin.sol"
+in_fn = "function bet("
+find = "if (startTime % ROUND != 0) revert BadStartTime(startTime);"
+replace = "if (false && startTime % ROUND != 0) revert BadStartTime(startTime);"
+tests_fail = ["test_betsRefused_atStart_andTooEarly"]
+
+[[claim]]
+row = "bet: closed at startTime"
+file = "src/FiveMin.sol"
+in_fn = "function bet("
+find = "if (block.timestamp >= startTime) revert BetsClosed(startTime);"
+replace = "if (false && block.timestamp >= startTime) revert BetsClosed(startTime);"
+tests_fail = ["test_betsRefused_atStart_andTooEarly"]
+
+[[claim]]
+row = "bet: open only an hour ahead"
+file = "src/FiveMin.sol"
+in_fn = "function bet("
+find = "if (block.timestamp + BETS_OPEN < startTime) revert BetsNotOpen(startTime);"
+replace = "if (false && block.timestamp + BETS_OPEN < startTime) revert BetsNotOpen(startTime);"
+tests_fail = ["test_betsRefused_atStart_andTooEarly"]
+
+[[claim]]
+row = "bet: at least minStake"
+file = "src/FiveMin.sol"
+in_fn = "function bet("
+find = "if (amount < l.minStake) revert StakeTooSmall(amount, l.minStake);"
+replace = "if (false && amount < l.minStake) revert StakeTooSmall(amount, l.minStake);"
+tests_fail = ["test_bet_belowMinStake_refused"]
+
+# Unproven and not a hole: without it a poke records prices for a round nobody bet on; nothing is owed.
+[[claim]]
+row = "poke: nothing to do without bets"
+file = "src/FiveMin.sol"
+in_fn = "function poke("
+find = "if (r.up == 0 && r.down == 0) return;"
+replace = "if (false && r.up == 0 && r.down == 0) return;"
+
+[[claim]]
+row = "claim: once"
+file = "src/FiveMin.sol"
+in_fn = "function claim("
+find = "if (claimed[k][msg.sender]) revert AlreadyClaimed();"
+replace = "if (false && claimed[k][msg.sender]) revert AlreadyClaimed();"
+tests_fail = ["test_void_equalPrice_refundsAll"]
+
+[[claim]]
+row = "claim: something to claim"
+file = "src/FiveMin.sol"
+in_fn = "function claim("
+find = "if (amount == 0) revert NothingToClaim();"
+replace = "if (false && amount == 0) revert NothingToClaim();"
+tests_fail = ["test_claim_loserGetsNothing_andPayoutIsZeroAfterClaim"]
+
+[[claim]]
+row = "collectFee: round is final"
+file = "src/FiveMin.sol"
+in_fn = "function collectFee("
+find = "if (o == Outcome.Pending) revert NotFinal();"
+replace = "if (false && o == Outcome.Pending) revert NotFinal();"
+tests_fail = ["test_collectFee_refusedWhilePending"]
+
+[[claim]]
+row = "collectFee: once"
+file = "src/FiveMin.sol"
+in_fn = "function collectFee("
+find = "if (r.feeCollected || o == Outcome.Void) return 0;"
+replace = "if (false || o == Outcome.Void) return 0;"
+tests_fail = ["test_fullRound_downWins_feeFromLosersOnly"]
+
+[[claim]]
+row = "collectFee: no fee on a void round"
+file = "src/FiveMin.sol"
+in_fn = "function collectFee("
+find = "if (r.feeCollected || o == Outcome.Void) return 0;"
+replace = "if (r.feeCollected || false) return 0;"
+tests_fail = ["test_collectFee_noFeeOnAVoidRound"]
+
+[[claim]]
+row = "outcome: no open reading"
+file = "src/FiveMin.sol"
+in_fn = "function outcome("
+find = "if (r.openAt == 0) return"
+replace = "if (false) return"
+tests_fail = ["test_readingBeforeT_orAfterWindow_isNotRecorded", "Hip3SourceTest::test_onlyBlocksInsideTheWindowSetACheckpoint", "test_collectFee_noFeeOnAVoidRound"]
+
+[[claim]]
+row = "outcome: no close reading"
+file = "src/FiveMin.sol"
+in_fn = "function outcome("
+find = "if (r.closeAt == 0) return"
+replace = "if (false) return"
+tests_fail = ["test_void_missedClose", "test_latePoke_recordsNothing_voidStaysVoid"]
+
+[[claim]]
+row = "outcome: no Up stakes"
+file = "src/FiveMin.sol"
+in_fn = "function outcome("
+find = "r.up == 0 || r.down == 0"
+replace = "false || r.down == 0"
+tests_fail = ["test_void_downOnly_evenIfUpWins"]
+
+[[claim]]
+row = "outcome: no Down stakes"
+file = "src/FiveMin.sol"
+in_fn = "function outcome("
+find = "r.up == 0 || r.down == 0"
+replace = "r.up == 0 || false"
+tests_fail = ["test_void_oneSided_refundsAll"]
+
+[[claim]]
+row = "outcome: equal prices"
+file = "src/FiveMin.sol"
+in_fn = "function outcome("
+find = "|| r.closePx == r.openPx)"
+replace = "|| false)"
+tests_fail = ["test_void_equalPrice_refundsAll"]
+
+[[claim]]
+row = "payout: 0 once claimed"
+file = "src/FiveMin.sol"
+in_fn = "function payout("
+find = "if (claimed[k][who]) return 0;"
+replace = "if (false && claimed[k][who]) return 0;"
+tests_fail = ["test_claim_loserGetsNothing_andPayoutIsZeroAfterClaim"]
+
+# Unproven and not a hole: redundant, mine + mine * pot / winners is 0 when mine is 0.
+[[claim]]
+row = "payout: 0 for no winning stake"
+file = "src/FiveMin.sol"
+in_fn = "function payout("
+find = "if (mine == 0) return 0;"
+replace = "if (false && mine == 0) return 0;"
+
+# Unproven: with it gone, a bet on an unlisted asset still reverts, at the token call to address 0.
+[[claim]]
+row = "_listing: asset is listed"
+file = "src/FiveMin.sol"
+in_fn = "function _listing("
+find = "if (address(l.source) == address(0)) revert NotListed(assetId);"
+replace = "if (false && address(l.source) == address(0)) revert NotListed(assetId);"
+
+# Unproven and not a hole: redundant, at >= t and at <= block.timestamp already imply it.
+[[claim]]
+row = "_admissible: block at or after T"
+file = "src/FiveMin.sol"
+in_fn = "function _admissible("
+find = "return block.timestamp >= t && "
+replace = "return true && "
+
+[[claim]]
+row = "_admissible: block by T + maxDelay"
+file = "src/FiveMin.sol"
+in_fn = "function _admissible("
+find = "&& block.timestamp <= end "
+replace = "&& true "
+tests_fail = ["test_latePoke_recordsNothing_voidStaysVoid"]
+
+[[claim]]
+row = "_admissible: reading at or after T"
+file = "src/FiveMin.sol"
+in_fn = "function _admissible("
+find = "&& at >= t "
+replace = "&& true "
+tests_fail = ["test_readingBeforeT_orAfterWindow_isNotRecorded"]
+
+# Unproven and not a hole: redundant, at <= block.timestamp <= t + maxDelay already implies it.
+[[claim]]
+row = "_admissible: reading by T + maxDelay"
+file = "src/FiveMin.sol"
+in_fn = "function _admissible("
+find = "&& at <= end "
+replace = "&& true "
+
+[[claim]]
+row = "_admissible: reading not ahead of the block"
+file = "src/FiveMin.sol"
+in_fn = "function _admissible("
+find = "&& at <= block.timestamp;"
+replace = "&& true;"
+tests_fail = ["test_readingAheadOfTheBlock_isNotRecorded"]
+
+[[claim]]
+row = "_pull: exact amount in"
+file = "src/FiveMin.sol"
+in_fn = "function _pull("
+find = "if (moved != amount) revert NotExact(amount, moved);"
+replace = "if (false && moved != amount) revert NotExact(amount, moved);"
+tests_fail = ["test_feeOnTransferToken_refused"]
+
+[[claim]]
+row = "_push: exact amount out"
+file = "src/FiveMin.sol"
+in_fn = "function _push("
+find = "if (moved != amount) revert NotExact(amount, moved);"
+replace = "if (false && moved != amount) revert NotExact(amount, moved);"
+tests_fail = ["test_feeOnPayoutToken_refusedAtClaim"]
+
+# Unproven: a failed transfer moves nothing, so _pull and _push still revert NotExact.
+[[claim]]
+row = "_call: the token call succeeded"
+file = "src/FiveMin.sol"
+in_fn = "function _call("
+find = "if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();"
+replace = "if (false && (!ok || (ret.length != 0 && !abi.decode(ret, (bool))))) revert TransferFailed();"

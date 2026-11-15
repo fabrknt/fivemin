@@ -16,6 +16,7 @@ Status: draft, not audited, not deployed. Tested on a Monad mainnet fork with a 
 
 ```sh
 forge test            # unit tests, the HIP-3 source with a mocked precompile, and the Monad fork round
+unproven unproven.toml   # delete each check in turn: which test notices (about 10 minutes)
 ```
 
 Uses [hl-price-guard](https://github.com/fabrknt/hl-price-guard) v0.4.1 (`PythRef`, `HLPriceGuard`).
@@ -31,11 +32,15 @@ used to check it, and what it found:
 |---|---|
 | A real round on a Monad mainnet fork | the recorded prices are Pyth's first updates after the start and end, read independently from `PriceFeedUpdate` logs |
 | Unit tests, and a fuzz test of the payout (1,000 runs) | pass; the fuzz test is what states "a winner never gets less than their stake" |
-| Codex review | pending |
+| Codex review r1 | CHANGES: a late poke could rewrite a void round, a reading ahead of the block was accepted, HIP-3 allowed a 299 s window, fee-on-transfer tokens; all fixed with a test each. One blocker is open (below) |
+| [unproven](https://github.com/fabrknt/unproven): delete each of the 38 checks in `FiveMin.sol` in turn | first run: 20 caught by a test, **18 caught by nothing**, as predicted row for row. Three of those would have lost money if the check were gone (a fee taken from a round still pending, a fee taken from a void round, a Down-only round won by Up paying no one). 11 tests added; now 31 caught, 7 unproven, each with the reason it is not a hole in [`unproven.toml`](unproven.toml) |
 
-What has not been done: an audit, a mainnet deployment, and a measurement of which checks a test
-would notice if deleted ([unproven](https://github.com/fabrknt/unproven) does not read Foundry's
-test output yet).
+**Open blocker (review r1):** with Pyth, anyone holding signed Pyth updates can push the most
+favourable price inside a checkpoint's window before the sponsored pusher does, then poke. See
+[docs/spec.md](docs/spec.md). Not for real money until it is closed.
+
+What has not been done: an audit and a mainnet deployment. The Monad fork test is not in the
+unproven table (it needs the network).
 
 ## License
 

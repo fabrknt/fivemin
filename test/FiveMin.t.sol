@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {FiveMin, IERC20} from "../src/FiveMin.sol";
 import {IPriceSource} from "../src/PriceSources.sol";
-import {FeeOnTransferERC20, MockERC20, MockSource} from "./Mocks.sol";
+import {FeeOnPayoutERC20, FeeOnTransferERC20, MockERC20, MockSource} from "./Mocks.sol";
 
 contract FiveMinTest is Test {
     FiveMin fm;
@@ -267,6 +267,120 @@ contract FiveMinTest is Test {
         vm.prank(alice);
         fm.acceptOwnership();
         assertEq(fm.owner(), alice);
+    }
+
+    // ---- added after unproven's first run (unproven.toml): each closes an unproven row ----
+
+    function _listing(uint64 maxDelay, uint16 feeBps, uint128 minStake) internal view returns (FiveMin.Listing memory) {
+        return FiveMin.Listing({
+            source: IPriceSource(address(src)),
+            feed: bytes32(0),
+            token: IERC20(address(usd)),
+            maxDelay: maxDelay,
+            feeBps: feeBps,
+            minStake: minStake,
+            paused: false
+        });
+    }
+
+    function test_onlyTheOwnerAdministers() public {
+        vm.startPrank(alice);
+        vm.expectRevert(FiveMin.NotOwner.selector);
+        fm.list(2, _listing(MAX_DELAY, 0, 1));
+        vm.expectRevert(FiveMin.NotOwner.selector);
+        fm.setPaused(ASSET, true);
+        vm.expectRevert(FiveMin.NotOwner.selector);
+        fm.setTreasury(alice);
+        vm.expectRevert(FiveMin.NotOwner.selector);
+        fm.transferOwnership(alice);
+        vm.stopPrank();
+    }
+
+    function test_listing_refusesBadSettings() public {
+        vm.expectRevert(FiveMin.BadListing.selector);
+        fm.list(2, _listing(0, 0, 1)); // a zero window: no checkpoint could ever be recorded
+        vm.expectRevert(FiveMin.BadListing.selector);
+        fm.list(2, _listing(MAX_DELAY, 501, 1)); // a fee above 5%
+        vm.expectRevert(FiveMin.BadListing.selector);
+        fm.list(2, _listing(MAX_DELAY, 0, 0)); // no minimum stake
+        fm.list(2, _listing(MAX_DELAY, 500, 1)); // the limits themselves are allowed
+    }
+
+    function test_bet_belowMinStake_refused() public {
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(FiveMin.StakeTooSmall.selector, 1e6 - 1, 1e6));
+        fm.bet(ASSET, T, true, 1e6 - 1);
+    }
+
+    /// Without the finality check a fee would be taken from a side that may still win.
+    function test_collectFee_refusedWhilePending() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        vm.expectRevert(FiveMin.NotFinal.selector);
+        fm.collectFee(ASSET, T);
+    }
+
+    /// A void round pays every stake back, so it has no fee.
+    function test_collectFee_noFeeOnAVoidRound() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        vm.warp(T + MAX_DELAY + 1); // the start was never recorded
+        assertEq(fm.collectFee(ASSET, T), 0);
+        assertEq(usd.balanceOf(treasury), 0);
+        vm.prank(alice);
+        fm.claim(ASSET, T);
+        vm.prank(bob);
+        fm.claim(ASSET, T);
+        assertEq(usd.balanceOf(address(fm)), 0);
+    }
+
+    /// A round with only Down stakes is void whichever way the price goes: if Up won, nobody
+    /// could claim and the stakes would stay in the contract.
+    function test_void_downOnly_evenIfUpWins() public {
+        _bet(alice, false, 10e6);
+        _bet(bob, false, 5e6);
+        _record(100e18, T + 5, 120e18, T + 305);
+        assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Void));
+        assertEq(fm.payout(ASSET, T, alice), 10e6);
+    }
+
+    function test_claim_loserGetsNothing_andPayoutIsZeroAfterClaim() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        _record(100e18, T + 5, 101e18, T + 305);
+        vm.prank(bob);
+        vm.expectRevert(FiveMin.NothingToClaim.selector);
+        fm.claim(ASSET, T);
+        vm.prank(alice);
+        fm.claim(ASSET, T);
+        assertEq(fm.payout(ASSET, T, alice), 0, "a claimed payout reads 0");
+    }
+
+    /// A token that keeps part of each outgoing transfer cannot pay a winner in full.
+    function test_feeOnPayoutToken_refusedAtClaim() public {
+        FeeOnPayoutERC20 fop = new FeeOnPayoutERC20();
+        FiveMin.Listing memory l = _listing(MAX_DELAY, 0, 1);
+        l.token = IERC20(address(fop));
+        fm.list(4, l);
+        address[2] memory who = [alice, bob];
+        for (uint256 i; i < 2; i++) {
+            fop.mint(who[i], 100);
+            vm.prank(who[i]);
+            fop.approve(address(fm), 100);
+        }
+        vm.prank(alice);
+        fm.bet(4, T, true, 100);
+        vm.prank(bob);
+        fm.bet(4, T, false, 100);
+        vm.warp(T + 5);
+        src.set(100e18, T + 5);
+        fm.poke(4, T);
+        vm.warp(T + 305);
+        src.set(101e18, T + 305);
+        fm.poke(4, T);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(FiveMin.NotExact.selector, 200, 180));
+        fm.claim(4, T);
     }
 
     /// Winners never get less than their stake, and claims plus the fee never exceed the stakes.
