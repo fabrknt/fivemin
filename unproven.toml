@@ -7,7 +7,7 @@
 
 root = "."
 build = "forge build"
-test = "forge test --no-match-contract MonadFork"
+test = "forge test --no-match-contract MonadFork --json"
 test_format = "forge"
 
 [[claim]]
@@ -192,7 +192,7 @@ file = "src/FiveMin.sol"
 in_fn = "function outcome("
 find = "if (r.openAt == 0) return"
 replace = "if (false) return"
-tests_fail = ["test_readingBeforeT_orAfterWindow_isNotRecorded", "Hip3SourceTest::test_onlyBlocksInsideTheWindowSetACheckpoint", "test_collectFee_noFeeOnAVoidRound"]
+tests_fail = ["test_readingBeforeT_orAfterWindow_isNotRecorded", "test/Hip3Source.t.sol::Hip3SourceTest::test_onlyBlocksInsideTheWindowSetACheckpoint", "test_collectFee_noFeeOnAVoidRound"]
 
 [[claim]]
 row = "outcome: no close reading"

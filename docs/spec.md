@@ -1,6 +1,7 @@
 # fivemin: five-minute up-or-down pools
 
-Spec r2, 2026-11-15. Status: draft. Codex review r1: CHANGES; r2 fixes below, one blocker open.
+Spec r3, 2026-11-15. Status: draft. Codex review r1: CHANGES, fixed in r2. r3: HIP-3 first (decided
+2026-11-15); the Pyth source stays for Monad but is not for real money until its blocker is closed.
 
 ## What it is
 
@@ -14,7 +15,12 @@ The price comes from a feed already on the chain, read for free:
 | chain | source | assets | update |
 |---|---|---|---|
 | Monad | Pyth sponsored push feeds, `getPriceUnsafe` | BTC, ETH, SOL, MON (premium) | 0.02% move or 1 h; BTC measured 2026-11-15: median 17 s, p90 50 s, max 90 s |
-| HyperEVM | HIP-3 oracle, precompile `0x807` (via hl-price-guard) | perps such as `xyz:NVDA` | set by the market's deployer |
+| HyperEVM | HIP-3 oracle, precompile `0x807`, accepted only while the mark and the book agree with it (`HLPriceGuard.read`) | perps such as `xyz:NVDA` | set by the market's deployer |
+
+Order: **HIP-3 first.** Nobody else can push a price into HyperCore's oracle, so the only choice
+left to a poker is the block inside a 3 s window. The Monad source has an open blocker (below)
+that needs Pyth's first-update-after-a-time check, which needs a Pyth API key; until then it is
+for testing only.
 
 ## Rounds
 
@@ -52,8 +58,13 @@ What this leaves open, stated plainly:
 - **Pyth:** if two pushes land after `T` before anyone pokes, the later one is recorded. The side
   the earlier push favoured had every reason to poke at once; the keeper pokes each block.
 - **HIP-3:** the price is the oracle in the block of the first poke, any block in `[T, T + 3 s]`.
-  The deployer sets the oracle and can decide outcomes; there is no independent reference. The
-  asset's listing says so.
+  The deployer sets the oracle. There is no free outside price for it, so `Hip3Source` refuses a
+  reading whose spread, mark or mid is further from the oracle than its bounds (set at deployment
+  from measured values). The deployer can still move oracle, mark and book together by trading;
+  this narrows what the deployer alone can do, it does not remove it. The listing says so.
+- **HIP-3 history:** the price precompiles answer with the current state whatever block a call
+  names (checked 2026-11-15), so a past round cannot be re-read; rounds are recorded as they
+  happen (`script/record_hip3.py`).
 
 ## Outcome
 
