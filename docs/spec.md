@@ -65,6 +65,10 @@ What this leaves open, stated plainly:
 - **HIP-3 history:** the price precompiles answer with the current state whatever block a call
   names (checked 2026-11-15), so a past round cannot be re-read; rounds are recorded as they
   happen (`script/record_hip3.py`).
+- **HIP-3 stocks outside market hours:** on Sunday 2026-11-15 xyz:NVDA's oracle changed twice in
+  six minutes while its book moved, and a recorded round opened and closed at 161.110 (void,
+  `test/Hip3Recorded.t.sol`). A stock listing is worth running only while its market is open;
+  how often the oracle moves then is to be measured (a round recorded in US hours).
 
 ## Outcome
 

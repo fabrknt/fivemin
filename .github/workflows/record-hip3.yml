@@ -1,0 +1,32 @@
+# Records one xyz:NVDA round on HyperEVM during US market hours, with script/record_hip3.py,
+# and keeps the JSON as an artifact. The price precompiles cannot be read for a past block,
+# so a round has to be recorded while it happens; a runner does not sleep like a laptop.
+name: record hip3 round
+
+on:
+  schedule:
+    - cron: "33 14 16 11 *" # 2026-11-16 14:33 UTC: three minutes before the 14:35 round, US open
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "how long to record"
+        default: "420"
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record
+        run: |
+          python3 -I script/record_hip3.py 1 2 3 "${{ github.event.inputs.seconds || '420' }}" \
+            "hip3-nvda-$(date -u +%Y%m%dT%H%MZ).json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hip3-nvda-round
+          path: hip3-nvda-*.json
+          retention-days: 30
