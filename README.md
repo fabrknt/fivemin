@@ -24,7 +24,7 @@ Uses [hl-price-guard](https://github.com/fabrknt/hl-price-guard) v0.4.1 (`PythRe
 ## Written with AI
 
 Claude (Opus 5.5) wrote all of it, in one session on 2026-11-15: the spec, the two contracts
-(277 lines) and the tests (441 lines); every commit names it as co-author. A person chose the
+(319 lines) and the tests (662 lines); every commit names it as co-author. A person chose the
 design (stakes close at the start, first reading after each checkpoint) and the checks. What was
 used to check it, and what it found:
 
