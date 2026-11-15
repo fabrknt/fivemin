@@ -6,6 +6,7 @@ import {IPriceSource} from "./PriceSources.sol";
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address who) external view returns (uint256);
 }
 
 /// Five-minute up-or-down pools (docs/spec.md). Stakes go on Up or Down before a round starts; the
@@ -44,6 +45,7 @@ contract FiveMin {
     }
 
     address public owner;
+    address public pendingOwner;
     address public treasury;
     mapping(uint256 assetId => Listing) public listings;
     mapping(bytes32 roundKey => Round) public rounds;
@@ -70,8 +72,12 @@ contract FiveMin {
     error AlreadyClaimed();
     error NothingToClaim();
     error TransferFailed();
+    error NotExact(uint256 expected, uint256 moved);
+    error ZeroAddress();
+    error NotPendingOwner();
 
     constructor(address treasury_) {
+        if (treasury_ == address(0)) revert ZeroAddress();
         owner = msg.sender;
         treasury = treasury_;
     }
@@ -84,12 +90,13 @@ contract FiveMin {
     // ---- owner ----
 
     /// Lists an asset once. A listing cannot be changed, so a round's rules are fixed from its
-    /// first bet; only new bets can be stopped (`setPaused`).
+    /// first bet; only new bets can be stopped (`setPaused`). `maxDelay` is capped by the source:
+    /// a HIP-3 reading's time is the block's, so its window is a choice of blocks and stays short.
     function list(uint256 assetId, Listing calldata l) external onlyOwner {
         if (address(listings[assetId].source) != address(0)) revert AlreadyListed(assetId);
         if (
-            address(l.source) == address(0) || address(l.token) == address(0) || l.maxDelay == 0 || l.maxDelay >= ROUND
-                || l.feeBps > MAX_FEE_BPS || l.minStake == 0
+            address(l.source) == address(0) || address(l.token).code.length == 0 || l.maxDelay == 0
+                || l.maxDelay > l.source.maxDelayLimit() || l.feeBps > MAX_FEE_BPS || l.minStake == 0
         ) revert BadListing();
         listings[assetId] = l;
         listings[assetId].paused = false;
@@ -101,12 +108,21 @@ contract FiveMin {
         emit Paused(assetId, paused);
     }
 
+    /// The fee of a round goes to the treasury at the time it is collected.
     function setTreasury(address treasury_) external onlyOwner {
+        if (treasury_ == address(0)) revert ZeroAddress();
         treasury = treasury_;
     }
 
-    function setOwner(address owner_) external onlyOwner {
-        owner = owner_;
+    /// Two steps: the new owner must accept, so a mistyped address cannot take the contract.
+    function transferOwnership(address owner_) external onlyOwner {
+        pendingOwner = owner_;
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        owner = msg.sender;
+        pendingOwner = address(0);
     }
 
     // ---- bettors ----
@@ -141,8 +157,7 @@ contract FiveMin {
             r.openAt = at;
             emit Recorded(assetId, startTime, false, px, at);
         }
-        uint64 endTime = startTime + ROUND;
-        if (r.closeAt == 0 && _admissible(at, endTime, l.maxDelay)) {
+        if (r.closeAt == 0 && _admissible(at, uint256(startTime) + ROUND, l.maxDelay)) {
             r.closePx = px;
             r.closeAt = at;
             emit Recorded(assetId, startTime, true, px, at);
@@ -183,9 +198,10 @@ contract FiveMin {
     function outcome(uint256 assetId, uint64 startTime) public view returns (Outcome) {
         Listing storage l = listings[assetId];
         Round storage r = rounds[key(assetId, startTime)];
-        uint64 endTime = startTime + ROUND;
-        // A checkpoint with no admissible reading by T + maxDelay voids the round.
-        if (r.openAt == 0) return block.timestamp > startTime + l.maxDelay ? Outcome.Void : Outcome.Pending;
+        uint256 endTime = uint256(startTime) + ROUND;
+        // A checkpoint with no admissible reading by T + maxDelay voids the round. poke records
+        // nothing after T + maxDelay, so a round that is Void stays Void.
+        if (r.openAt == 0) return block.timestamp > uint256(startTime) + l.maxDelay ? Outcome.Void : Outcome.Pending;
         if (r.closeAt == 0) return block.timestamp > endTime + l.maxDelay ? Outcome.Void : Outcome.Pending;
         if (r.up == 0 || r.down == 0 || r.closePx == r.openPx) return Outcome.Void;
         return r.closePx > r.openPx ? Outcome.Up : Outcome.Down;
@@ -214,18 +230,31 @@ contract FiveMin {
         if (address(l.source) == address(0)) revert NotListed(assetId);
     }
 
-    function _admissible(uint64 at, uint64 t, uint64 maxDelay) private view returns (bool) {
-        return block.timestamp >= t && at >= t && at <= t + maxDelay;
+    /// A reading counts for checkpoint `t` only while the block is inside `[t, t + maxDelay]` and the
+    /// reading's own time is inside that window and not ahead of the block.
+    function _admissible(uint64 at, uint256 t, uint64 maxDelay) private view returns (bool) {
+        uint256 end = t + maxDelay;
+        return block.timestamp >= t && block.timestamp <= end && at >= t && at <= end && at <= block.timestamp;
     }
 
+    /// Transfers must move exactly `amount`: a token that takes a fee on transfer or rebases would
+    /// leave the pool short of what it owes, so it is refused at the first bet.
     function _pull(IERC20 token, address from, uint256 amount) private {
-        (bool ok, bytes memory ret) =
-            address(token).call(abi.encodeCall(IERC20.transferFrom, (from, address(this), amount)));
-        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
+        uint256 before = token.balanceOf(address(this));
+        _call(token, abi.encodeCall(IERC20.transferFrom, (from, address(this), amount)));
+        uint256 moved = token.balanceOf(address(this)) - before;
+        if (moved != amount) revert NotExact(amount, moved);
     }
 
     function _push(IERC20 token, address to, uint256 amount) private {
-        (bool ok, bytes memory ret) = address(token).call(abi.encodeCall(IERC20.transfer, (to, amount)));
+        uint256 before = token.balanceOf(to);
+        _call(token, abi.encodeCall(IERC20.transfer, (to, amount)));
+        uint256 moved = token.balanceOf(to) - before;
+        if (moved != amount) revert NotExact(amount, moved);
+    }
+
+    function _call(IERC20 token, bytes memory data) private {
+        (bool ok, bytes memory ret) = address(token).call(data);
         if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
     }
 }

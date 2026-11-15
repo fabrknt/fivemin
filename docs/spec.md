@@ -1,6 +1,6 @@
 # fivemin: five-minute up-or-down pools
 
-Spec r1, 2026-11-15. Status: draft, not reviewed.
+Spec r2, 2026-11-15. Status: draft. Codex review r1: CHANGES; r2 fixes below, one blocker open.
 
 ## What it is
 
@@ -32,19 +32,27 @@ they could wait for a price that suits them. So each of the two checkpoints (`st
 - `poke(assetId, startTime)` reads the source and, for each checkpoint not yet recorded, records the
   reading if it is admissible for that checkpoint. Anyone may call it; the operator's keeper calls it
   every block after each checkpoint.
-- Admissible for checkpoint `T`:
-  - Pyth: `publishTime >= T` and `publishTime <= T + maxDelay`, price > 0, confidence within
-    `maxConfBps`. The reading's time is its `publishTime`.
-  - HIP-3: `block.timestamp >= T` and `block.timestamp <= T + maxDelay`, oracle > 0. The reading's
-    time is the block's.
+- Admissible for checkpoint `T`, all of: the block is in `[T, T + maxDelay]`; the reading's time is
+  in `[T, T + maxDelay]`; the reading's time is not ahead of the block.
+  - Pyth: the reading's time is its `publishTime`; price > 0; confidence within the source's
+    `maxConfBps` (one per deployed `PythPushSource`, shared by its listings).
+  - HIP-3: the reading's time is the block's; oracle > 0.
+- After `T + maxDelay` nothing is recorded for `T`, so a round that is Void stays Void.
 - A recorded price never changes.
+- `maxDelay` is capped by the source: 120 s for Pyth push (the longest gap measured on Monad was
+  90 s), 3 s for HIP-3 (each block in the window is a price the poker could pick).
 
 What this leaves open, stated plainly:
+- **Pyth, open blocker (review r1):** anyone holding signed Pyth updates (Hermes) can push one with a
+  `publishTime` in the window before the sponsored pusher does, then poke. They can pick the most
+  favourable signed price in `[T, T + maxDelay]`. Pyth stores only an update newer than the stored
+  one, so the choice is among prices published after the last stored push. Closing it needs either
+  Pyth's `parsePriceFeedUpdatesUnique` (the first update after `T`, which takes updates from
+  Hermes, i.e. an API key) or a window short enough that the choice is worth little. Not decided.
 - **Pyth:** if two pushes land after `T` before anyone pokes, the later one is recorded. The side
-  the earlier push favoured had every reason to poke at once; the keeper pokes each block. Pushes
-  are about 17 s apart and blocks 0.4 s, so the gap is small but not zero.
-- **HIP-3:** the price is the oracle in the block of the first poke. A poker can choose any block in
-  `[T, T + maxDelay]`, so `maxDelay` is kept to a few seconds. The deployer sets the oracle; the
+  the earlier push favoured had every reason to poke at once; the keeper pokes each block.
+- **HIP-3:** the price is the oracle in the block of the first poke, any block in `[T, T + 3 s]`.
+  The deployer sets the oracle and can decide outcomes; there is no independent reference. The
   asset's listing says so.
 
 ## Outcome
@@ -58,10 +66,12 @@ What this leaves open, stated plainly:
 
 ## Assets
 
-- The owner lists an asset once: source, feed (Pyth id or HIP-3 perp), `maxDelay`, `maxConfBps`,
-  stake token, minimum stake. A listing cannot be changed afterwards, so a round's rules are fixed
+- The owner lists an asset once: source, feed (Pyth id or HIP-3 perp), `maxDelay`, stake token,
+  minimum stake. The stake token must have code, and every transfer must move exactly the amount
+  (a fee-on-transfer or rebasing token is refused at the first bet). A listing cannot be changed afterwards, so a round's rules are fixed
   when its first bet is placed. The owner can stop new bets on an asset (not existing rounds).
-- The fee goes to a treasury address set by the owner. `feeBps` is fixed per listing, at most 500.
+- The fee goes to the treasury at the time it is collected (never the zero address). `feeBps` is
+  fixed per listing, at most 500. Ownership moves in two steps (transfer, then accept).
 
 ## Not in scope
 

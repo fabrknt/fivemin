@@ -8,6 +8,9 @@ import {IPyth, PythRef} from "hl-price-guard/src/PythRef.sol";
 interface IPriceSource {
     /// `price` in 1e18; `at` in unix seconds.
     function read(bytes32 feed) external view returns (uint256 price, uint64 at);
+
+    /// The longest checkpoint window a listing on this source may use.
+    function maxDelayLimit() external view returns (uint64);
 }
 
 /// Pyth's stored price, as pushed by Pyth's sponsored feeds (Monad mainnet: BTC, ETH, SOL and MON
@@ -22,6 +25,11 @@ contract PythPushSource is IPriceSource {
         maxConfBps = maxConfBps_;
     }
 
+    /// The longest gap between Monad's BTC pushes measured on 2026-11-15 was 90 s.
+    function maxDelayLimit() external pure returns (uint64) {
+        return 120;
+    }
+
     function read(bytes32 feed) external view returns (uint256 price, uint64 at) {
         HLPriceGuard.Ref memory r = PythRef.read(pyth, feed, 0, maxConfBps);
         return (r.price, uint64(r.updatedAt));
@@ -33,6 +41,11 @@ contract PythPushSource is IPriceSource {
 /// its window short for that reason. For a HIP-3 market the deployer sets this oracle.
 /// `feed` packs the perp: `dex << 40 | index << 8 | szDecimals`.
 contract Hip3Source is IPriceSource {
+    /// Each block in the window is a price the poker could pick; a few blocks at most.
+    function maxDelayLimit() external pure returns (uint64) {
+        return 3;
+    }
+
     function read(bytes32 feed) external view returns (uint256 price, uint64 at) {
         uint256 f = uint256(feed);
         HLPriceGuard.Asset memory a =

@@ -22,7 +22,7 @@ contract MockERC20 {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) external virtual returns (bool) {
         allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
@@ -43,5 +43,19 @@ contract MockSource is IPriceSource {
     function read(bytes32) external view returns (uint256, uint64) {
         require(price != 0, "no price");
         return (price, at);
+    }
+
+    function maxDelayLimit() external pure returns (uint64) {
+        return 120;
+    }
+}
+
+/// Keeps 10% of every transfer: the pool would owe more than it holds.
+contract FeeOnTransferERC20 is MockERC20 {
+    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount - amount / 10;
+        return true;
     }
 }

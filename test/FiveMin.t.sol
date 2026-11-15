@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {FiveMin, IERC20} from "../src/FiveMin.sol";
 import {IPriceSource} from "../src/PriceSources.sol";
-import {MockERC20, MockSource} from "./Mocks.sol";
+import {FeeOnTransferERC20, MockERC20, MockSource} from "./Mocks.sol";
 
 contract FiveMinTest is Test {
     FiveMin fm;
@@ -183,6 +183,90 @@ contract FiveMinTest is Test {
         fm.bet(ASSET, T, true, 1e6);
         _record(100e18, T + 5, 101e18, T + 305); // the paused asset's round still settles
         assertEq(fm.payout(ASSET, T, alice), 10e6 + 9.8e6);
+    }
+
+    /// Review r1 blocker: after a checkpoint's deadline a poke records nothing, even with a reading
+    /// stamped inside the window, so a round that went Void stays Void.
+    function test_latePoke_recordsNothing_voidStaysVoid() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        vm.warp(T + 5);
+        src.set(100e18, T + 5);
+        fm.poke(ASSET, T);
+        src.set(150e18, T + 300 + 5); // a close stamped inside the window, never poked in time
+        vm.warp(T + 300 + MAX_DELAY + 1);
+        assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Void));
+        fm.poke(ASSET, T);
+        (,,,,, uint64 closeAt,) = fm.rounds(fm.key(ASSET, T));
+        assertEq(closeAt, 0);
+        assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Void));
+    }
+
+    /// Review r1: a reading stamped ahead of the block is not the price at that block.
+    function test_readingAheadOfTheBlock_isNotRecorded() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        vm.warp(T);
+        src.set(100e18, T + 30);
+        fm.poke(ASSET, T);
+        (,,,, uint64 openAt,,) = fm.rounds(fm.key(ASSET, T));
+        assertEq(openAt, 0);
+    }
+
+    function test_listing_capsTheWindow_andRefusesTokensWithoutCode() public {
+        FiveMin.Listing memory l = FiveMin.Listing({
+            source: IPriceSource(address(src)),
+            feed: bytes32(0),
+            token: IERC20(address(usd)),
+            maxDelay: 121, // MockSource allows 120
+            feeBps: 0,
+            minStake: 1,
+            paused: false
+        });
+        vm.expectRevert(FiveMin.BadListing.selector);
+        fm.list(2, l);
+        l.maxDelay = 120;
+        l.token = IERC20(makeAddr("no code"));
+        vm.expectRevert(FiveMin.BadListing.selector);
+        fm.list(2, l);
+    }
+
+    /// Review r1: a token that keeps part of each transfer is refused at the first bet.
+    function test_feeOnTransferToken_refused() public {
+        FeeOnTransferERC20 fot = new FeeOnTransferERC20();
+        fm.list(
+            3,
+            FiveMin.Listing({
+                source: IPriceSource(address(src)),
+                feed: bytes32(0),
+                token: IERC20(address(fot)),
+                maxDelay: MAX_DELAY,
+                feeBps: 0,
+                minStake: 1,
+                paused: false
+            })
+        );
+        fot.mint(alice, 100);
+        vm.startPrank(alice);
+        fot.approve(address(fm), 100);
+        vm.expectRevert(abi.encodeWithSelector(FiveMin.NotExact.selector, 100, 90));
+        fm.bet(3, T, true, 100);
+        vm.stopPrank();
+    }
+
+    function test_zeroAddresses_andTwoStepOwner() public {
+        vm.expectRevert(FiveMin.ZeroAddress.selector);
+        new FiveMin(address(0));
+        vm.expectRevert(FiveMin.ZeroAddress.selector);
+        fm.setTreasury(address(0));
+        fm.transferOwnership(alice);
+        assertEq(fm.owner(), address(this), "not until accepted");
+        vm.prank(bob);
+        vm.expectRevert(FiveMin.NotPendingOwner.selector);
+        fm.acceptOwnership();
+        vm.prank(alice);
+        fm.acceptOwnership();
+        assertEq(fm.owner(), alice);
     }
 
     /// Winners never get less than their stake, and claims plus the fee never exceed the stakes.
