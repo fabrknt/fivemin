@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {IPyth} from "hl-price-guard/src/PythRef.sol";
 import {FiveMin, IERC20} from "../src/FiveMin.sol";
 import {IPriceSource, PythPushSource} from "../src/PriceSources.sol";
@@ -63,6 +63,11 @@ contract MonadForkTest is Test {
         fm.bet(ASSET, T, false, 60e6);
         vm.prank(carol);
         fm.bet(ASSET, T, false, 40e6);
+        console2.log(
+            "bets at block %s, %s s before the start: alice Up 100, bob Down 60, carol Down 40",
+            block.number,
+            T - block.timestamp
+        );
 
         // A poke before any update after the start records nothing.
         fm.poke(ASSET, T);
@@ -74,12 +79,21 @@ contract MonadForkTest is Test {
         (,, uint256 openPx,, uint64 at,,) = fm.rounds(fm.key(ASSET, T));
         assertEq(at, 1794715528, "the first update after the start");
         assertEq(openPx, 64725.57339582e18);
+        console2.log(
+            "open  recorded at block %s: BTC %s, published %s s after the start", block.number, openPx / 1e18, at - T
+        );
 
         vm.rollFork(CLOSE_BLOCK);
         fm.poke(ASSET, T);
         (,,, uint256 closePx,, uint64 closeAt,) = fm.rounds(fm.key(ASSET, T));
         assertEq(closeAt, 1794715802, "the first update after the end");
         assertEq(closePx, 64634.05983568e18);
+        console2.log(
+            "close recorded at block %s: BTC %s, published %s s after the end",
+            block.number,
+            closePx / 1e18,
+            closeAt - T - 300
+        );
 
         assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Down));
         vm.prank(bob);
@@ -88,6 +102,7 @@ contract MonadForkTest is Test {
         assertEq(fm.claim(ASSET, T), 40e6 + 39.2e6);
         assertEq(fm.payout(ASSET, T, alice), 0);
         assertEq(fm.collectFee(ASSET, T), 2e6);
+        console2.log("Down won: bob claims 118.8, carol 79.2, alice 0, fee 2 (2% of the losing side)");
         assertEq(usd.balanceOf(address(fm)), 0);
     }
 }

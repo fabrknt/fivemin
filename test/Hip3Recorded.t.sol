@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {HLPrecompiles} from "hl-price-guard/src/HLPrecompiles.sol";
 import {FiveMin, IERC20} from "../src/FiveMin.sol";
 import {Hip3Source, IPriceSource} from "../src/PriceSources.sol";
@@ -80,10 +80,16 @@ contract Hip3RecordedTest is Test {
         assertEq(openAt, T);
         assertEq(closeAt, T + 300);
         assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Void));
+        console2.log(
+            "xyz:NVDA open %s / 1000 at the start, close %s / 1000 at the end: equal, so the round is void",
+            openPx / 1e15,
+            closePx / 1e15
+        );
         vm.prank(alice);
         assertEq(fm.claim(ASSET, T), 50e6);
         vm.prank(bob);
         assertEq(fm.claim(ASSET, T), 30e6);
         assertEq(fm.collectFee(ASSET, T), 0);
+        console2.log("every stake back: alice 50, bob 30; no fee");
     }
 }
