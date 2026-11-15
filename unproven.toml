@@ -184,7 +184,7 @@ file = "src/FiveMin.sol"
 in_fn = "function collectFee("
 find = "if (r.feeCollected || o == Outcome.Void) return 0;"
 replace = "if (r.feeCollected || false) return 0;"
-tests_fail = ["test_collectFee_noFeeOnAVoidRound"]
+tests_fail = ["test_collectFee_noFeeOnAVoidRound", "test/Hip3Recorded.t.sol::Hip3RecordedTest::test_recordedSundayRound_equalOracle_isVoid"]
 
 [[claim]]
 row = "outcome: no open reading"
@@ -224,7 +224,7 @@ file = "src/FiveMin.sol"
 in_fn = "function outcome("
 find = "|| r.closePx == r.openPx)"
 replace = "|| false)"
-tests_fail = ["test_void_equalPrice_refundsAll"]
+tests_fail = ["test_void_equalPrice_refundsAll", "test/Hip3Recorded.t.sol::Hip3RecordedTest::test_recordedSundayRound_equalOracle_isVoid"]
 
 [[claim]]
 row = "payout: 0 once claimed"
