@@ -146,6 +146,24 @@ in_fn = "function poke("
 find = "if (r.up == 0 && r.down == 0) return;"
 replace = "if (false && r.up == 0 && r.down == 0) return;"
 
+# Added 2026-11-16, after the first 38: a recorded price never changes. Before then nothing caught
+# deleting the close's guard (the open's was already caught).
+[[claim]]
+row = "poke: open recorded once"
+file = "src/FiveMin.sol"
+in_fn = "function poke("
+find = "if (r.openAt == 0 && _admissible(at, startTime, l.maxDelay)) {"
+replace = "if (_admissible(at, startTime, l.maxDelay)) {"
+tests_fail = ["test_recordedPriceNeverChanges"]
+
+[[claim]]
+row = "poke: close recorded once"
+file = "src/FiveMin.sol"
+in_fn = "function poke("
+find = "if (r.closeAt == 0 && _admissible(at, uint256(startTime) + ROUND, l.maxDelay)) {"
+replace = "if (_admissible(at, uint256(startTime) + ROUND, l.maxDelay)) {"
+tests_fail = ["test_recordedCloseNeverChanges"]
+
 [[claim]]
 row = "claim: once"
 file = "src/FiveMin.sol"

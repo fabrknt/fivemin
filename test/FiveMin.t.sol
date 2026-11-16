@@ -109,6 +109,26 @@ contract FiveMinTest is Test {
         assertEq(openAt, T + 5);
     }
 
+    /// The same for the close: deleting `r.closeAt == 0 &&` in poke failed no test before this one,
+    /// and would let whoever pokes last inside the window pick the closing price.
+    function test_recordedCloseNeverChanges() public {
+        _bet(alice, true, 10e6);
+        _bet(bob, false, 10e6);
+        vm.warp(T + 5);
+        src.set(100e18, T + 5);
+        fm.poke(ASSET, T);
+        vm.warp(T + 302);
+        src.set(90e18, T + 302);
+        fm.poke(ASSET, T);
+        vm.warp(T + 330);
+        src.set(150e18, T + 330); // a later print inside the window that would flip the outcome to Up
+        fm.poke(ASSET, T);
+        (,,, uint256 closePx,, uint64 closeAt,) = fm.rounds(fm.key(ASSET, T));
+        assertEq(closePx, 90e18);
+        assertEq(closeAt, T + 302);
+        assertEq(uint256(fm.outcome(ASSET, T)), uint256(FiveMin.Outcome.Down));
+    }
+
     function test_void_oneSided_refundsAll() public {
         _bet(alice, true, 10e6);
         _bet(bob, true, 5e6);
