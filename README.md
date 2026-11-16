@@ -11,7 +11,7 @@ already on the chain, and never change once recorded. Spec: [docs/spec.md](docs/
 | `Hip3Source` | HyperEVM | a Hyperliquid perp's oracle, precompile 0x807 (HIP-3: set by the deployer) |
 
 Status: draft, not audited, not deployed. Tested on a Monad mainnet fork with a real round: BTC,
-2026-11-15 03:25 UTC, recorded at Pyth's first updates after the start ($64,725.57) and the end
+2026-11-15 04:05 UTC, recorded at Pyth's first updates after the start ($64,725.57) and the end
 ($64,634.06), Down won.
 
 ```sh

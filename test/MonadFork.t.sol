@@ -7,7 +7,7 @@ import {FiveMin, IERC20} from "../src/FiveMin.sol";
 import {IPriceSource, PythPushSource} from "../src/PriceSources.sol";
 import {MockERC20} from "./Mocks.sol";
 
-/// One real round on Monad mainnet: BTC, the round starting 2026-11-15 03:25:00 UTC (1794715500).
+/// One real round on Monad mainnet: BTC, the round starting 2026-11-15 04:05:00 UTC (1794715500).
 /// Pyth's sponsored push feed updated BTC/USD at publishTime 1794715528 (block 122356773), the
 /// first update after the start, and at 1794715802 (block 122357676), the first after the end.
 /// Found with eth_getLogs for PriceFeedUpdate on 0x2880…7B43. Needs an RPC that serves state at
