@@ -92,4 +92,36 @@ contract Hip3RecordedTest is Test {
         assertEq(fm.collectFee(ASSET, T), 0);
         console2.log("every stake back: alice 50, bob 30; no fee");
     }
+
+    /// A second recording, Monday 2026-11-16, after the US close (the scheduled run fired at 23:28 UTC,
+    /// nine hours after its 14:33 cron): test/data/hip3-nvda-20261116T2328Z.json. The round started at
+    /// 23:30:00 UTC (1794871800); the first blocks at or after the start and the end were 51458425 and
+    /// 51458730. The oracle changed 87 times in the seven minutes recorded (twice in six on Sunday):
+    /// open 155.500, close 155.430, so Down wins. Spread at most 2.57 bps, mark 5.79, mid 13.83.
+    function test_recordedMondayAfterHoursRound_downWins() public {
+        uint64 t = 1794871800;
+        vm.warp(t - 30);
+        vm.prank(alice);
+        fm.bet(ASSET, t, true, 50e6);
+        vm.prank(bob);
+        fm.bet(ASSET, t, false, 30e6);
+
+        _block(t, 155_500, 155_560, 155_620, 155_630); // block 51458425
+        fm.poke(ASSET, t);
+        _block(t + 300, 155_430, 155_480, 155_480, 155_490); // block 51458730
+        fm.poke(ASSET, t);
+
+        (,, uint256 openPx, uint256 closePx,,,) = fm.rounds(fm.key(ASSET, t));
+        assertEq(openPx, 155.5e18);
+        assertEq(closePx, 155.43e18);
+        assertEq(uint256(fm.outcome(ASSET, t)), uint256(FiveMin.Outcome.Down));
+        console2.log("xyz:NVDA open %s / 1000, close %s / 1000: Down wins", openPx / 1e15, closePx / 1e15);
+        vm.prank(alice);
+        vm.expectRevert(FiveMin.NothingToClaim.selector);
+        fm.claim(ASSET, t);
+        vm.prank(bob);
+        assertEq(fm.claim(ASSET, t), 79e6);
+        assertEq(fm.collectFee(ASSET, t), 1e6);
+        console2.log("bob (Down 30) claims 79: his 30 and alice's 50 less a 2%% fee on it (1)");
+    }
 }

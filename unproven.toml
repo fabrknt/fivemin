@@ -178,7 +178,7 @@ file = "src/FiveMin.sol"
 in_fn = "function claim("
 find = "if (amount == 0) revert NothingToClaim();"
 replace = "if (false && amount == 0) revert NothingToClaim();"
-tests_fail = ["test_claim_loserGetsNothing_andPayoutIsZeroAfterClaim"]
+tests_fail = ["test_claim_loserGetsNothing_andPayoutIsZeroAfterClaim", "test_recordedMondayAfterHoursRound_downWins"]
 
 [[claim]]
 row = "collectFee: round is final"

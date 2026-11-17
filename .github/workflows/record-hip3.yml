@@ -3,9 +3,10 @@
 # so a round has to be recorded while it happens; a runner does not sleep like a laptop.
 name: record hip3 round
 
+# The one scheduled run (cron "33 14 16 11 *", for the 2026-11-16 US open) fired at 23:28 UTC, nine
+# hours late, after the close: GitHub's schedule is no clock for a set minute. Start it by hand
+# (gh workflow run record-hip3.yml) at the minute wanted.
 on:
-  schedule:
-    - cron: "33 14 16 11 *" # 2026-11-16 14:33 UTC: three minutes before the 14:35 round, US open
   workflow_dispatch:
     inputs:
       seconds:
