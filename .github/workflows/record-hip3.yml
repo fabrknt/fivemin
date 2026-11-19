@@ -3,10 +3,14 @@
 # so a round has to be recorded while it happens; a runner does not sleep like a laptop.
 name: record hip3 round
 
-# The one scheduled run (cron "33 14 16 11 *", for the 2026-11-16 US open) fired at 23:28 UTC, nine
-# hours late, after the close: GitHub's schedule is no clock for a set minute. Start it by hand
-# (gh workflow run record-hip3.yml) at the minute wanted.
+# The one scheduled run for a set minute (cron "33 14 16 11 *", for the 2026-11-16 US open) fired at
+# 23:28 UTC, nine hours late, after the close: GitHub's schedule is no clock for a set minute. So the
+# schedule only wakes the job hours early, on weekdays, and the job itself waits for 09:35 New York time
+# (either side of daylight saving). A late start still records if the market is open, and skips if not.
+# A run started by hand records at once.
 on:
+  schedule:
+    - cron: "0 9 * * 1-5"
   workflow_dispatch:
     inputs:
       seconds:
@@ -19,9 +23,18 @@ permissions:
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # up to 5 h 35 min of waiting (09:00 UTC to 09:35 New York in winter), then the recording
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for 09:35 New York
+        if: github.event_name == 'schedule'
+        run: |
+          at=$(TZ=America/New_York date -d "09:35" +%s)
+          close=$(TZ=America/New_York date -d "15:50" +%s)
+          now=$(date +%s)
+          if [ "$now" -ge "$close" ]; then echo "started after 15:50 New York; nothing to record"; exit 1; fi
+          if [ "$now" -lt "$at" ]; then echo "waiting $(( at - now )) s"; sleep $(( at - now )); fi
       - name: Record
         run: |
           python3 -I script/record_hip3.py 1 2 3 "${{ github.event.inputs.seconds || '420' }}" \
