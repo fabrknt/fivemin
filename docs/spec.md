@@ -43,6 +43,10 @@ they could wait for a price that suits them. So each of the two checkpoints (`st
   - Pyth: the reading's time is its `publishTime`; price > 0; confidence within the source's
     `maxConfBps` (one per deployed `PythPushSource`, shared by its listings).
   - HIP-3: the reading's time is the block's; oracle > 0.
+- A checkpoint is shared: round `S`'s close and round `S + 300`'s open are the same moment. One
+  poke records the reading in both (where each has stakes and is not yet recorded), so the two
+  never get different prices. Found by the TLA+ model (`formal/`); before this each round was
+  recorded by its own poke and could take a different block's price.
 - After `T + maxDelay` nothing is recorded for `T`, so a round that is Void stays Void.
 - A recorded price never changes.
 - `maxDelay` is capped by the source: 120 s for Pyth push (the longest gap measured on Monad was
@@ -105,3 +109,5 @@ What this leaves open, stated plainly:
 5. Bets refused at or after `startTime`, and before `startTime - 3600`.
 6. Payout sums never exceed the stakes; a winner never gets less than their stake.
 7. The HIP-3 source with a mocked precompile: the window rule above.
+8. A round's close and the next round's open get the same reading, whichever round is poked first.
+9. The TLA+ model (`formal/`) holds its safety properties under TLC on both sources.

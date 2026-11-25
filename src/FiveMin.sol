@@ -145,23 +145,16 @@ contract FiveMin {
     }
 
     /// Records the current reading for each checkpoint it is admissible for and that is not yet
-    /// recorded. Anyone may call; a recorded price never changes.
+    /// recorded. Anyone may call; a recorded price never changes. A checkpoint is shared: round
+    /// `startTime`'s close is round `startTime + ROUND`'s open, and one poke records both, so the two
+    /// never get different prices.
     function poke(uint256 assetId, uint64 startTime) external {
         Listing storage l = _listing(assetId);
-        bytes32 k = key(assetId, startTime);
-        Round storage r = rounds[k];
+        Round storage r = rounds[key(assetId, startTime)];
         if (r.up == 0 && r.down == 0) return; // no bets, nothing to settle
         (uint256 px, uint64 at) = l.source.read(l.feed);
-        if (r.openAt == 0 && _admissible(at, startTime, l.maxDelay)) {
-            r.openPx = px;
-            r.openAt = at;
-            emit Recorded(assetId, startTime, false, px, at);
-        }
-        if (r.closeAt == 0 && _admissible(at, uint256(startTime) + ROUND, l.maxDelay)) {
-            r.closePx = px;
-            r.closeAt = at;
-            emit Recorded(assetId, startTime, true, px, at);
-        }
+        if (_admissible(at, startTime, l.maxDelay)) _record(assetId, startTime, px, at);
+        if (_admissible(at, uint256(startTime) + ROUND, l.maxDelay)) _record(assetId, startTime + ROUND, px, at);
     }
 
     function claim(uint256 assetId, uint64 startTime) external returns (uint256 amount) {
@@ -224,6 +217,23 @@ contract FiveMin {
     }
 
     // ---- internal ----
+
+    /// Records a reading for checkpoint `t` in both rounds that use it, where not yet recorded:
+    /// the close of the round ending at `t` and the open of the round starting at `t`.
+    function _record(uint256 assetId, uint64 t, uint256 px, uint64 at) private {
+        Round storage ending = rounds[key(assetId, t - ROUND)];
+        if (ending.closeAt == 0 && (ending.up != 0 || ending.down != 0)) {
+            ending.closePx = px;
+            ending.closeAt = at;
+            emit Recorded(assetId, t - ROUND, true, px, at);
+        }
+        Round storage starting = rounds[key(assetId, t)];
+        if (starting.openAt == 0 && (starting.up != 0 || starting.down != 0)) {
+            starting.openPx = px;
+            starting.openAt = at;
+            emit Recorded(assetId, t, false, px, at);
+        }
+    }
 
     function _listing(uint256 assetId) private view returns (Listing storage l) {
         l = listings[assetId];
